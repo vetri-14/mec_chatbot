@@ -1,71 +1,104 @@
-# chatbot.py
-# Core chatbot logic with JSON-based FAQ + rule-based intent detection
+import pandas as pd
+import difflib
+import os
+from IPython.display import display
+import ipywidgets as widgets
 
-import json
+# Step 1: Create and save the FAQ data
+data = {
+    "Question Keyword": [
+        "courses offered", "semester start", "tuition fee", "exam schedule", "academic calendar",
+        "admission deadline", "result date", "syllabus", "study material", "fee payment",
+        "hostel facilities", "scholarship options", "library access", "placement support",
+        "internship support", "transport facility", "department contact", "leave application",
+        "attendance rules", "revaluation process"
+    ],
+    "Answer": [
+        "Our college offers B.E, B.Tech, M.E, and MBA programs.",
+        "The semester starts on July 15, 2025.",
+        "Tuition fee varies by course. For B.E: ₹75,000 per year.",
+        "Exam schedule will be available on the college portal.",
+        "You can find it at /downloads/academic_calendar.pdf",
+        "The last date for admission is June 30, 2025.",
+        "Results will be announced in the first week of August.",
+        "All course syllabi are available on the student portal.",
+        "Study materials are shared by faculty via the LMS portal.",
+        "Fees can be paid online through the college payment gateway.",
+        "Yes, hostel facilities are available for both boys and girls.",
+        "Merit-based and need-based scholarships are available.",
+        "Library is open from 8 AM to 8 PM on all working days.",
+        "We offer 100% placement assistance through our placement cell.",
+        "Students can apply for internships through the college portal.",
+        "College buses are available on major city routes.",
+        "Department contacts are available on the official website.",
+        "Leave applications can be submitted through the student portal.",
+        "Minimum 75% attendance is required to appear for exams.",
+        "Revaluation forms are available one week after result publication."
+    ]
+}
 
-# Load FAQ data from JSON file
-with open('data/faq.json', 'r', encoding='utf-8') as f:
-    faq_data = json.load(f)
+faq_df = pd.DataFrame(data)
+faq_df.to_csv('faq.csv', index=False)
 
-# Function to search for a matching question in FAQ
-def search_faq(user_input):
+# Step 2: Load FAQ and prepare
+faq_df = pd.read_csv('faq.csv')
+faq_df['Question Keyword'] = faq_df['Question Keyword'].str.lower()
+
+log_filename = "user_questions_log.csv"
+if not os.path.exists(log_filename):
+    pd.DataFrame(columns=["User Question"]).to_csv(log_filename, index=False)
+
+# Greetings and help
+greetings = ["hi", "hello", "hey", "good morning", "good afternoon"]
+help_text = "You can ask about: " + ", ".join(faq_df['Question Keyword'].tolist())
+
+# Step 3: Define chatbot response logic
+def chatbot_response(user_input):
     user_input = user_input.lower()
-    for item in faq_data:
-        question = item["question"].lower()
-        if question in user_input or user_input in question:
-            return item["answer"]
-    return None
+    log_question(user_input)
 
-# Function to handle rule-based keyword matching
-def rule_based_response(user_input):
-    user_input = user_input.lower()
+    if user_input in greetings:
+        return "Hello! I'm Smart EduBot. How can I help you today?"
 
-    if "admission" in user_input or "apply" in user_input:
-        return "You can apply for admissions online through our portal. Admissions are open for B.Tech, M.Tech, MBA, and more. Visit: /admissions"
+    if "help" in user_input or "topics" in user_input:
+        return help_text
 
-    elif "courses" in user_input or "programs" in user_input:
-        return "We offer B.Tech, M.Tech, BBA, MBA, B.Sc, and diploma programs across various departments."
+    matches = difflib.get_close_matches(user_input, faq_df['Question Keyword'], n=1, cutoff=0.4)
+    if matches:
+        matched_row = faq_df[faq_df['Question Keyword'] == matches[0]]
+        return matched_row['Answer'].values[0]
 
-    elif "eligibility" in user_input:
-        return "Eligibility criteria differ by course. For B.Tech, you need a minimum of 60% in 12th grade with PCM subjects."
+    for _, row in faq_df.iterrows():
+        if row['Question Keyword'] in user_input:
+            return row['Answer']
 
-    elif "deadline" in user_input:
-        return "The last date to apply for admissions is June 30th. Hurry up!"
+    return "I'm sorry, I didn't understand that. Type 'help' to see what I can answer."
 
-    elif "fee" in user_input or "fees" in user_input or "tuition" in user_input:
-        return "The tuition fee for B.Tech is ₹90,000 per year. Scholarships and installment options are available."
+# Step 4: Logging function
+def log_question(question):
+    log_df = pd.read_csv(log_filename)
+    new_entry = pd.DataFrame({"User Question": [question]})
+    log_df = pd.concat([log_df, new_entry], ignore_index=True)
+    log_df.to_csv(log_filename, index=False)
 
-    elif "exam" in user_input and "schedule" in user_input:
-        return "The semester exam schedule will be published on the student portal by May 1st."
+# Step 5: Create interface in Colab
+input_box = widgets.Textarea(
+    placeholder='Type your questions here, one per line...',
+    layout=widgets.Layout(width='100%', height='120px')
+)
+button = widgets.Button(description="Ask Smart EduBot", button_style='success')
+output = widgets.Output()
 
-    elif "results" in user_input:
-        return "You can check your results on the university portal using your student login."
+def on_button_click(b):
+    output.clear_output()
+    questions = input_box.value.strip().split('\n')
+    with output:
+        for q in questions:
+            if q.strip():
+                print(f"You: {q}")
+                print(f"Smart EduBot: {chatbot_response(q)}\n")
 
-    elif "academic calendar" in user_input or "semester start" in user_input:
-        return "The academic calendar is available on our website. The semester starts on July 10th."
+button.on_click(on_button_click)
 
-    elif "syllabus" in user_input or "study material" in user_input:
-        return "Syllabus and study materials can be downloaded from the LMS portal or collected from your department."
-
-    elif "hello" in user_input or "hi" in user_input:
-        return "Hello! I’m Smart EduBot 🤖. How can I assist you today?"
-
-    elif "thank" in user_input:
-        return "You're welcome! 😊 Let me know if you need anything else."
-
-    return None
-
-# Main function to get chatbot response
-def get_bot_response(user_input):
-    # First try matching from the FAQ file
-    response = search_faq(user_input)
-
-    # If no FAQ match found, use rule-based logic
-    if not response:
-        response = rule_based_response(user_input)
-
-    # If still no match, return fallback
-    if not response:
-        response = "I'm sorry, I couldn't find an answer for that. Please rephrase your question or contact support."
-
-    return response
+# Display form
+display(input_box, button, output)

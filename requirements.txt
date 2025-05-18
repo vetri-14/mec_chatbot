@@ -1,6 +1,0 @@
-# For NLP (optional for future improvements)
-nltk==3.8.1
-spacy==3.7.2
-
-# For SQLite interaction (built-in with Python, but using SQLAlchemy for easier access)
-SQLAlchemy==2.0.23
